@@ -21,6 +21,13 @@
         </div>
     @endif
 
+    @php
+        // Hitung status telat secara dinamis (tanpa mengubah data di database)
+        $telatCount = $peminjamans->filter(function ($p) {
+            return in_array($p->status, ['dipinjam', 'telat']) && $p->tgl_kembali_plan->isPast();
+        })->count();
+    @endphp
+
     {{-- Ringkasan cepat --}}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
@@ -41,7 +48,7 @@
                 </svg>
             </div>
             <div>
-                <p class="text-2xl font-bold text-gray-900">{{ $peminjamans->where('status', 'telat')->count() }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ $telatCount }}</p>
                 <p class="text-sm text-gray-500">Terlambat</p>
             </div>
         </div>
@@ -87,7 +94,9 @@
         <div class="p-5">
             @forelse($peminjamans as $item)
                 @php
-                    $isTelat = $item->status == 'telat';
+                    // Telat dihitung dari tanggal rencana kembali vs hari ini, bukan dari kolom status di DB
+                    $isTelat = in_array($item->status, ['dipinjam', 'telat']) && $item->tgl_kembali_plan->isPast();
+                    $statusLabel = $isTelat ? 'Telat' : ucfirst($item->status);
                 @endphp
                 <div class="mb-4 last:mb-0 rounded-2xl border {{ $isTelat ? 'border-red-200' : 'border-gray-200' }} overflow-hidden hover:shadow-md transition-shadow duration-200">
                     <div class="flex flex-col lg:flex-row">
@@ -103,7 +112,7 @@
                                 <span class="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
                                     {{ $isTelat ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700' }}">
                                     <span class="w-1.5 h-1.5 rounded-full {{ $isTelat ? 'bg-red-500 animate-pulse' : 'bg-blue-500' }}"></span>
-                                    {{ ucfirst($item->status) }}
+                                    {{ $statusLabel }}
                                 </span>
                                 <div class="mt-3 space-y-1 text-xs text-gray-500">
                                     <p class="flex items-center gap-1.5">
@@ -112,7 +121,7 @@
                                     </p>
                                     <p class="flex items-center gap-1.5">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        Kembali: <span class="font-medium text-gray-700">{{ $item->tgl_kembali_plan->format('d-m-Y') }}</span>
+                                        Kembali: <span class="font-medium {{ $isTelat ? 'text-red-600' : 'text-gray-700' }}">{{ $item->tgl_kembali_plan->format('d-m-Y') }}</span>
                                     </p>
                                 </div>
                             </div>
