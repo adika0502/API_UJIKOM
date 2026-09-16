@@ -14,8 +14,8 @@
                 </svg>
             </div>
             <div>
-                <p class="text-2xl font-bold text-gray-900">{{ $laporans->count() }}</p>
-                <p class="text-sm text-gray-500">Total Data</p>
+                <p class="text-gray-500 font-medium">Tidak ada data pada periode ini</p>
+                <p class="text-sm text-gray-400 mt-1">Coba ubah status atau rentang tanggal pencarian.</p>
             </div>
         </div>
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">

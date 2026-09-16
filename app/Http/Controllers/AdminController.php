@@ -60,10 +60,12 @@ class AdminController extends Controller
         $request->validate([
             'nama_alat' => 'required|string|max:255',
             'kategori_id' => 'required|exists:kategoris,id',
-            'stok' => 'required|integer|min:0',
+            'stok' => 'required|integer|min:1',
             'status_kondisi' => 'required|string|max:100',
             'deskripsi' => 'nullable|string',
             'gambar' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        ], [
+            'stok.min' => 'Stok alat baru minimal harus 1.',
         ]);
 
         $data = $request->all();

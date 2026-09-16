@@ -30,7 +30,14 @@
         @if($status = request('status'))
             <p style="font-size: 11px;">Status: {{ ucfirst($status) }}</p>
         @endif
-        <p style="font-size: 11px;">Periode: {{ request('dari_tanggal') }} s/d {{ request('sampai_tanggal') }}</p>
+        @if(request('dari_tanggal') && request('sampai_tanggal'))
+            <p style="font-size: 11px;">
+                Periode: {{ \Carbon\Carbon::parse(request('dari_tanggal'))->format('d-m-Y') }}
+                s/d {{ \Carbon\Carbon::parse(request('sampai_tanggal'))->format('d-m-Y') }}
+            </p>
+        @else
+            <p style="font-size: 11px;">Periode: Semua Data</p>
+        @endif
     </div>
 
     <table>
@@ -64,7 +71,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="text-center">Tidak ada data laporan.</td>
+                    <td colspan="7" class="text-center">Tidak ada data pada periode ini.</td>
                 </tr>
             @endforelse
         </tbody>

@@ -21,7 +21,7 @@ class UpdateKategoriRequest extends FormRequest
                 'string',
                 'max:255',
                 // Mengabaikan pengecekan unik untuk ID kategori yang sedang di-update
-                Rule::unique('kategori', 'nama_kategori')->ignore($kategori),
+                Rule::unique('kategoris', 'nama_kategori')->ignore($kategori),
             ],
         ];
     }
