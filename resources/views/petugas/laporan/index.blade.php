@@ -5,6 +5,12 @@
 
 @section('content')
 
+    @php
+        $telatCountLaporan = $laporans->filter(function ($p) {
+            return in_array($p->status, ['dipinjam', 'telat']) && $p->tgl_kembali_plan->lt(today());
+        })->count();
+    @endphp
+
     {{-- Ringkasan cepat --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
@@ -14,8 +20,8 @@
                 </svg>
             </div>
             <div>
-                <p class="text-gray-500 font-medium">Tidak ada data pada periode ini</p>
-                <p class="text-sm text-gray-400 mt-1">Coba ubah status atau rentang tanggal pencarian.</p>
+                <p class="text-2xl font-bold text-gray-900">{{ $laporans->count() }}</p>
+                <p class="text-sm text-gray-500">Total Data</p>
             </div>
         </div>
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
@@ -36,7 +42,7 @@
                 </svg>
             </div>
             <div>
-                <p class="text-2xl font-bold text-gray-900">{{ $laporans->where('status', 'telat')->count() }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ $telatCountLaporan }}</p>
                 <p class="text-sm text-gray-500">Telat</p>
             </div>
         </div>
@@ -134,13 +140,15 @@
                 <tbody class="text-gray-700 text-sm">
                     @forelse($laporans as $index => $item)
                         @php
+                            $isTelatDinamis = in_array($item->status, ['dipinjam', 'telat']) && $item->tgl_kembali_plan->lt(today());
+                            $statusTampil = $isTelatDinamis ? 'telat' : $item->status;
                             $badgeMap = [
                                 'selesai'  => ['bg-emerald-100 text-emerald-700', 'bg-emerald-500'],
                                 'dipinjam' => ['bg-blue-100 text-blue-700', 'bg-blue-500'],
                                 'telat'    => ['bg-red-100 text-red-700', 'bg-red-500 animate-pulse'],
                                 'diajukan' => ['bg-amber-100 text-amber-700', 'bg-amber-500'],
                             ];
-                            [$badgeClass, $dotClass] = $badgeMap[$item->status] ?? ['bg-gray-100 text-gray-700', 'bg-gray-400'];
+                            [$badgeClass, $dotClass] = $badgeMap[$statusTampil] ?? ['bg-gray-100 text-gray-700', 'bg-gray-400'];
                             $denda = $item->pengembalian->denda ?? 0;
                         @endphp
                         <tr class="hover:bg-gray-50 transition align-top even:bg-gray-50/40">
@@ -158,7 +166,7 @@
                             <td class="py-3 px-4 border-b">
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold {{ $badgeClass }}">
                                     <span class="w-1.5 h-1.5 rounded-full {{ $dotClass }}"></span>
-                                    {{ ucfirst($item->status) }}
+                                    {{ ucfirst($statusTampil) }}
                                 </span>
                             </td>
                             <td class="py-3 px-4 border-b">
@@ -183,7 +191,7 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
                                         </svg>
                                     </div>
-                                    <p class="text-gray-500 font-medium">Tidak ada data laporan yang sesuai filter</p>
+                                    <p class="text-gray-500 font-medium">Tidak ada data pada periode ini</p>
                                     <p class="text-sm text-gray-400 mt-1">Coba ubah status atau rentang tanggal pencarian.</p>
                                 </div>
                             </td>

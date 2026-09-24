@@ -136,6 +136,18 @@ class AdminController extends Controller
     {
         $alat = Alat::findOrFail($id);
 
+        // Cek apakah alat ini masih ada di peminjaman yang belum selesai
+        $sedangDipinjam = DetailPinjam::whereHas('peminjaman', function ($query) {
+                $query->whereIn('status', ['diajukan', 'dipinjam', 'telat', 'dikembalikan']);
+            })
+            ->where('alat_id', $alat->id)
+            ->exists();
+
+        if ($sedangDipinjam) {
+            return redirect()->route('admin.alat.index')
+                ->with('error', 'Alat sedang dipinjam, tidak dapat dihapus');
+        }
+
         // Hapus file gambar fisik jika ada
         if ($alat->gambar && file_exists(public_path($alat->gambar))) {
             unlink(public_path($alat->gambar));
@@ -227,6 +239,17 @@ class AdminController extends Controller
     public function destroyUser($id)
     {
         $user = User::findOrFail($id);
+
+        // Cek apakah user masih punya peminjaman yang aktif (belum selesai)
+        $adaPeminjamanAktif = Peminjaman::where('user_id', $user->id)
+            ->whereIn('status', ['diajukan', 'dipinjam', 'telat', 'dikembalikan'])
+            ->exists();
+
+        if ($adaPeminjamanAktif) {
+            return redirect()->route('admin.user.index')
+                ->with('error', 'User masih memiliki peminjaman aktif');
+        }
+
         $user->delete();
 
         return redirect()->route('admin.user.index')->with('success', 'User berhasil dihapus.');
@@ -294,10 +317,10 @@ class AdminController extends Controller
     {
         $kategori = Kategori::findOrFail($id);
 
-        // Opsional: Cek apakah kategori masih dipakai oleh alat
+        // Cek apakah kategori masih dipakai oleh alat
         if ($kategori->alat()->count() > 0) {
             return redirect()->route('admin.kategori.index')
-                ->with('error', 'Kategori tidak dapat dihapus karena masih digunakan oleh data alat.');
+                ->with('error', 'Kategori masih digunakan oleh alat, tidak dapat dihapus');
         }
 
         $kategori->delete();

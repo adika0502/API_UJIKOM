@@ -64,25 +64,25 @@ class PengembalianController extends Controller
                     throw new Exception("Data ditolak. Peminjaman ini berstatus '{$peminjaman->status}', bukan 'dipinjam'.");
                 }
 
-               // Cek keterlambatan menggunakan Carbon
-            $tglKembaliPlan = Carbon::parse($peminjaman->tgl_kembali_plan)->startOfDay();
-            $hariIni = Carbon::now()->startOfDay();
-            $tglKembaliAktual = now()->toDateString();
+                // Cek keterlambatan menggunakan Carbon
+                $tglKembaliPlan = Carbon::parse($peminjaman->tgl_kembali_plan)->startOfDay();
+                $hariIni = Carbon::now()->startOfDay();
+                $tglKembaliAktual = now()->toDateString();
 
-            // Jika hari ini lebih besar dari tanggal rencana kembali, maka telat
-            $statusPeminjamanBaru = $hariIni->greaterThan($tglKembaliPlan) ? 'telat' : 'dikembalikan';
+                // Jika hari ini lebih besar dari tanggal rencana kembali, maka telat
+                $statusPeminjamanBaru = $hariIni->greaterThan($tglKembaliPlan) ? 'telat' : 'dikembalikan';
 
-            // Hitung denda otomatis berdasarkan keterlambatan
-            $dendaOtomatis = Pengembalian::hitungDenda($peminjaman->tgl_kembali_plan, $tglKembaliAktual);
+                // Hitung denda otomatis berdasarkan keterlambatan
+                $dendaOtomatis = Pengembalian::hitungDenda($peminjaman->tgl_kembali_plan, $tglKembaliAktual);
 
-            // 1. Insert data ke tabel pengembalian
-            $pengembalian = Pengembalian::create([
-                'peminjaman_id' => $peminjaman->id,
-                'tgl_kembali' => $tglKembaliAktual,
-                'kondisi_kembali' => $request->kondisi_kembali,
-                'denda' => $dendaOtomatis,
-                'petugas_id' => auth()->id(), // Ambil ID user (petugas) yang sedang login
-            ]);
+                // 1. Insert data ke tabel pengembalian
+                $pengembalian = Pengembalian::create([
+                    'peminjaman_id' => $peminjaman->id,
+                    'tgl_kembali' => $tglKembaliAktual,
+                    'kondisi_kembali' => $request->kondisi_kembali,
+                    'denda' => $dendaOtomatis,
+                    'petugas_id' => auth()->id(), // Ambil ID user (petugas) yang sedang login
+                ]);
 
                 // 2. Ubah status di tabel peminjaman utama
                 $peminjaman->update(['status' => $statusPeminjamanBaru]);
@@ -99,8 +99,9 @@ class PengembalianController extends Controller
                     'aktivitas' => "Memproses pengembalian peminjaman ID: #{$peminjaman->id} dengan status akhir: {$statusPeminjamanBaru}."
                 ]);
 
-                // Load relasi agar response JSON lebih informatif
-                return $pengembalian->load(['peminjaman.user', 'petugas']);
+                // FIX: tambahkan 'peminjaman.detailPinjam.alat' supaya konsisten dengan index()/show(),
+                // sehingga response hasil "Terima Pengembalian" langsung membawa detail alat yang dikembalikan.
+                return $pengembalian->load(['peminjaman.user', 'peminjaman.detailPinjam.alat', 'petugas']);
             });
 
             return response()->json([
@@ -124,7 +125,9 @@ class PengembalianController extends Controller
 
         return response()->json([
             'message' => 'Data pengembalian berhasil diperbarui.',
-            'data' => $pengembalian->load(['peminjaman.user', 'petugas'])
+            // FIX: tambahkan juga di sini supaya konsisten, kalau frontend memakai response update()
+            // untuk menampilkan/merefresh kolom alat yang dikembalikan.
+            'data' => $pengembalian->load(['peminjaman.user', 'peminjaman.detailPinjam.alat', 'petugas'])
         ]);
     }
 

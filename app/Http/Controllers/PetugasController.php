@@ -34,6 +34,13 @@ class PetugasController extends Controller
         DB::beginTransaction();
         try {
             $peminjaman = Peminjaman::with('detailPinjam')->findOrFail($id);
+
+            // Cegah approve ganda: tolak jika status sudah bukan 'diajukan' lagi
+            if ($peminjaman->status !== 'diajukan') {
+                DB::rollback();
+                return redirect()->back()->with('error', 'Pengajuan sudah diproses');
+            }
+
             $peminjaman->update(['status' => 'dipinjam']);
 
             // Kurangi stok alat secara otomatis
@@ -57,7 +64,7 @@ class PetugasController extends Controller
         $search = $request->input('search');
 
         $peminjamans = Peminjaman::with(['user', 'detailPinjam.alat', 'pengembalian'])
-            ->whereIn('status', ['dipinjam', 'telat'])
+            ->whereIn('status', ['dipinjam', 'telat', 'dikembalikan'])
             ->when($search, function ($query, $search) {
                 return $query->whereHas('user', function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%");
@@ -113,7 +120,7 @@ class PetugasController extends Controller
     public function prosesPengembalian(Request $request, $id)
     {
         $request->validate([
-            'kondisi_kembali' => 'required|string',
+            'kondisi_kembali' => 'required|string|in:Baik,Rusak Ringan,Rusak Berat',
         ]);
 
         DB::beginTransaction();
@@ -130,19 +137,34 @@ class PetugasController extends Controller
                 $alat->save();
             }
 
-            // Hitung denda otomatis berdasarkan keterlambatan
-            $denda = Pengembalian::hitungDenda($peminjaman->tgl_kembali_plan, $tglKembaliAktual);
+            // Denda keterlambatan (otomatis dari selisih hari)
+            $dendaTelat = Pengembalian::hitungDenda($peminjaman->tgl_kembali_plan, $tglKembaliAktual);
+
+            // Denda kerusakan (berdasarkan kondisi alat saat dikembalikan)
+            $dendaRusak = match ($request->kondisi_kembali) {
+                'Rusak Ringan' => config('denda.rusak_ringan', 50000),
+                'Rusak Berat' => config('denda.rusak_berat', 250000),
+                default => 0,
+            };
+
+            // Total denda = telat + rusak (digabung)
+            $totalDenda = $dendaTelat + $dendaRusak;
 
             Pengembalian::create([
                 'peminjaman_id' => $peminjaman->id,
                 'petugas_id' => auth()->id(),
                 'tgl_kembali' => $tglKembaliAktual,
                 'kondisi_kembali' => $request->kondisi_kembali,
-                'denda' => $denda,
+                'denda' => $totalDenda,
             ]);
 
+            $pesan = "Pengembalian berhasil diproses. Total denda: Rp " . number_format($totalDenda, 0, ',', '.');
+            if ($dendaTelat > 0 && $dendaRusak > 0) {
+                $pesan .= " (Telat: Rp" . number_format($dendaTelat, 0, ',', '.') . " + Rusak: Rp" . number_format($dendaRusak, 0, ',', '.') . ")";
+            }
+
             DB::commit();
-            return redirect()->back()->with('success', "Pengembalian berhasil diproses. Denda: Rp " . number_format($denda, 0, ',', '.'));
+            return redirect()->back()->with('success', $pesan);
         } catch (\Exception $e) {
             DB::rollback();
             return redirect()->back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());

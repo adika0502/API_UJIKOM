@@ -22,9 +22,8 @@
     @endif
 
     @php
-        // Hitung status telat secara dinamis (tanpa mengubah data di database)
         $telatCount = $peminjamans->filter(function ($p) {
-            return in_array($p->status, ['dipinjam', 'telat']) && $p->tgl_kembali_plan->isPast();
+            return in_array($p->status, ['dipinjam', 'telat']) && $p->tgl_kembali_plan->lt(today());
         })->count();
     @endphp
 
@@ -94,8 +93,7 @@
         <div class="p-5">
             @forelse($peminjamans as $item)
                 @php
-                    // Telat dihitung dari tanggal rencana kembali vs hari ini, bukan dari kolom status di DB
-                    $isTelat = in_array($item->status, ['dipinjam', 'telat']) && $item->tgl_kembali_plan->isPast();
+                    $isTelat = in_array($item->status, ['dipinjam', 'telat']) && $item->tgl_kembali_plan->lt(today());
                     $statusLabel = $isTelat ? 'Telat' : ucfirst($item->status);
                 @endphp
                 <div class="mb-4 last:mb-0 rounded-2xl border {{ $isTelat ? 'border-red-200' : 'border-gray-200' }} overflow-hidden hover:shadow-md transition-shadow duration-200">
