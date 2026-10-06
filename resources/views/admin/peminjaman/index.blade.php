@@ -13,11 +13,7 @@
         {{ session('success') }}
     </div>
 @endif
-@if(session('error'))
-    <div class="mb-4 bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg shadow-sm text-sm">
-        {{ session('error') }}
-    </div>
-@endif
+{{-- Alert error dihapus dari halaman ini karena sudah ditampilkan oleh layouts/app.blade.php (sebelumnya muncul dobel) --}}
 
 <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
     <!-- Header -->
@@ -103,7 +99,8 @@
                             $statusStyles = [
                                 'diajukan' => 'bg-amber-100 text-amber-800',
                                 'dipinjam' => 'bg-blue-100 text-blue-800',
-                                'dikembalikan' => 'bg-emerald-100 text-emerald-800',
+                                'selesai' => 'bg-emerald-100 text-emerald-800',
+                                'dikembalikan' => 'bg-teal-100 text-teal-800',
                                 'telat' => 'bg-red-100 text-red-800',
                             ];
                             $style = $statusStyles[$peminjaman->status] ?? 'bg-gray-100 text-gray-800';
@@ -116,15 +113,38 @@
                     <!-- Aksi (Dropdown Status + Tombol Hapus) -->
                     <td class="py-4 px-6 text-center">
                         <div class="flex flex-col items-center gap-2">
+                            @php
+                                // Final = sudah ada record Pengembalian (sudah diverifikasi & diproses petugas).
+                                // TIDAK dicek dari nama status, karena status 'telat' punya dua arti:
+                                // (1) masih dipinjam tapi lewat tenggat (belum final, boleh diubah admin), dan
+                                // (2) sudah dikembalikan tapi kena denda telat (sudah final, jangan diubah lagi).
+                                $isFinal = $peminjaman->pengembalian !== null;
+
+                                // Urutan sesuai alur & transisi yang diizinkan (harus sama dengan AdminController::updateStatusPeminjaman)
+                                $urutanStatus = ['diajukan', 'dipinjam', 'telat', 'dikembalikan', 'selesai'];
+                                $transisi = [
+                                    'diajukan'     => ['dipinjam'],
+                                    'dipinjam'     => ['telat', 'dikembalikan', 'selesai'],
+                                    'telat'        => ['dikembalikan', 'selesai'],
+                                    'dikembalikan' => ['selesai'],
+                                    'selesai'      => [],
+                                ];
+                                $opsiBoleh = $transisi[$peminjaman->status] ?? [];
+
+                                // Dropdown dikunci kalau sudah final atau tidak ada status tujuan lagi
+                                $dikunci = $isFinal || count($opsiBoleh) === 0;
+                            @endphp
                             <form action="{{ route('admin.peminjaman.updateStatus', $peminjaman->id) }}" method="POST" class="w-full">
                                 @csrf
                                 @method('PUT')
-                                <select name="status" onchange="this.form.submit()"
-                                    class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
-                                    <option value="diajukan" {{ $peminjaman->status == 'diajukan' ? 'selected' : '' }}>Diajukan</option>
-                                    <option value="dipinjam" {{ $peminjaman->status == 'dipinjam' ? 'selected' : '' }}>Dipinjam</option>
-                                    <option value="dikembalikan" {{ $peminjaman->status == 'dikembalikan' ? 'selected' : '' }}>Dikembalikan</option>
-                                    <option value="telat" {{ $peminjaman->status == 'telat' ? 'selected' : '' }}>Telat</option>
+                                <select name="status" onchange="this.form.submit()" {{ $dikunci ? 'disabled' : '' }}
+                                    title="{{ $isFinal ? 'Status sudah final dan dikelola lewat menu Kelola Pengembalian' : ($dikunci ? 'Status akhir, tidak bisa diubah lagi' : '') }}"
+                                    class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 {{ $dikunci ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 cursor-pointer' }}">
+                                    @foreach($urutanStatus as $s)
+                                        @if($s === $peminjaman->status || in_array($s, $opsiBoleh))
+                                            <option value="{{ $s }}" {{ $peminjaman->status === $s ? 'selected' : '' }}>{{ ucfirst($s) }}</option>
+                                        @endif
+                                    @endforeach
                                 </select>
                             </form>
 

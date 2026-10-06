@@ -15,6 +15,10 @@ use Illuminate\Support\Facades\Hash;
 
 class AdminController extends Controller
 {
+    // ========================
+    // DASHBOARD
+    // ========================
+
     // Menampilkan Dashboard Admin & Log Aktivitas
     public function index()
     {
@@ -27,7 +31,11 @@ class AdminController extends Controller
         return view('admin.dashboard', compact('logs', 'totalAlat', 'peminjamanAktif', 'pengembalianBulanIni', 'totalUser'));
     }
 
-    // CRUD Alat: Menampilkan daftar alat
+    // ========================
+    // KELOLA ALAT
+    // ========================
+
+    // 1. Menampilkan daftar alat
     public function indexAlat(Request $request)
     {
         $search = $request->input('search');
@@ -158,103 +166,11 @@ class AdminController extends Controller
         return redirect()->route('admin.alat.index')->with('success', 'Data alat berhasil dihapus.');
     }
 
-    // CRUD User (Manajemen User Admin, Petugas, Peminjam)
-    // Mendukung fitur search dan pagination
-    public function indexUser(Request $request)
-    {
-        $search = $request->input('search');
+    // ========================
+    // KELOLA KATEGORI
+    // ========================
 
-        $users = User::when($search, function ($query, $search) {
-                return $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('role', 'like', "%{$search}%");
-            })
-            ->latest()
-            ->paginate(10) // Tampilkan 10 data per halaman
-            ->withQueryString(); // Memastikan parameter search tetap ada saat pindah halaman
-
-        return view('admin.user.index', compact('users', 'search'));
-    }
-
-    public function createUser()
-    {
-        return view('admin.user.create');
-    }
-
-    // Menyimpan user baru ke database
-    public function storeUser(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6',
-            'role' => 'required|in:admin,petugas,peminjam',
-        ]);
-
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => $request->role,
-            'no_hp' => $request->no_hp,
-        ]);
-
-        return redirect()->route('admin.user.index')->with('success', 'User berhasil ditambahkan.');
-    }
-
-    public function editUser($id)
-    {
-        $user = User::findOrFail($id);
-        return view('admin.user.edit', compact('user'));
-    }
-
-    // Memperbarui data user
-    public function updateUser(Request $request, $id)
-    {
-        $user = User::findOrFail($id);
-
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $id,
-            'role' => 'required|in:admin,petugas,peminjam',
-        ]);
-
-        $data = [
-            'name' => $request->name,
-            'email' => $request->email,
-            'role' => $request->role,
-            'no_hp' => $request->no_hp,
-        ];
-
-        if ($request->filled('password')) {
-            $data['password'] = Hash::make($request->password);
-        }
-
-        $user->update($data);
-
-        return redirect()->route('admin.user.index')->with('success', 'Data user berhasil diperbarui.');
-    }
-
-    // Menghapus user
-    public function destroyUser($id)
-    {
-        $user = User::findOrFail($id);
-
-        // Cek apakah user masih punya peminjaman yang aktif (belum selesai)
-        $adaPeminjamanAktif = Peminjaman::where('user_id', $user->id)
-            ->whereIn('status', ['diajukan', 'dipinjam', 'telat', 'dikembalikan'])
-            ->exists();
-
-        if ($adaPeminjamanAktif) {
-            return redirect()->route('admin.user.index')
-                ->with('error', 'User masih memiliki peminjaman aktif');
-        }
-
-        $user->delete();
-
-        return redirect()->route('admin.user.index')->with('success', 'User berhasil dihapus.');
-    }
-
+    // 1. Menampilkan daftar kategori
     public function indexKategori(Request $request)
     {
         $search = $request->input('search');
@@ -328,12 +244,16 @@ class AdminController extends Controller
         return redirect()->route('admin.kategori.index')->with('success', 'Kategori berhasil dihapus.');
     }
 
+    // ========================
+    // KELOLA PEMINJAMAN
+    // ========================
+
     // 1. Menampilkan daftar peminjaman
     public function indexPeminjaman(Request $request)
     {
         $search = $request->input('search');
 
-        $peminjamans = Peminjaman::with(['user', 'detailPinjam.alat'])
+        $peminjamans = Peminjaman::with(['user', 'detailPinjam.alat', 'pengembalian'])
             ->when($search, function ($query, $search) {
                 return $query->where('status', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($q) use ($search) {
@@ -395,7 +315,7 @@ class AdminController extends Controller
                     'jumlah' => $jumlahPinjam,
                 ]);
 
-                // Kurangi stok alat jika status langsung disetujui/dipinjam (Opsional, atau dikurangi saat status berubah jadi 'dipinjam')
+                // Stok dikurangi saat status berubah jadi 'dipinjam' (lihat updateStatusPeminjaman)
             }
 
             DB::commit();
@@ -406,23 +326,55 @@ class AdminController extends Controller
         }
     }
 
-    // 4. Memperbarui status peminjaman (Misal: dari diajukan -> dipinjam / selesai)
+    // 4. Memperbarui status peminjaman (alur satu arah: diajukan -> dipinjam -> telat/dikembalikan -> selesai)
     public function updateStatusPeminjaman(Request $request, $id)
     {
         $peminjaman = Peminjaman::with('detailPinjam.alat')->findOrFail($id);
 
         $request->validate([
-            'status' => 'required|in:diajukan,dipinjam,selesai,telat',
+            'status' => 'required|in:diajukan,dipinjam,selesai,dikembalikan,telat',
         ]);
+
+        // Guard di sisi server: kalau peminjaman ini sudah punya record Pengembalian
+        // (sudah diverifikasi & diproses petugas lewat Kelola Pengembalian),
+        // jangan biarkan diubah lagi lewat dropdown ini.
+        // Dicek dari record Pengembalian, BUKAN dari nama status — karena status
+        // 'telat' punya dua makna: (1) masih dipinjam tapi lewat tenggat (belum final),
+        // dan (2) sudah dikembalikan tapi kena denda telat (sudah final).
+        if ($peminjaman->pengembalian()->exists()) {
+            return back()->with('error', 'Peminjaman ini sudah diproses lewat Kelola Pengembalian dan tidak bisa diubah lewat sini.');
+        }
+
+        $statusLama = $peminjaman->status;
+        $statusBaru = $request->status;
+
+        if ($statusLama === $statusBaru) {
+            return back()->with('error', "Status sudah '{$statusLama}'.");
+        }
+
+        // Transisi yang diizinkan (satu arah, tidak bisa mundur)
+        $transisi = [
+            'diajukan'     => ['dipinjam'],
+            'dipinjam'     => ['telat', 'dikembalikan', 'selesai'],
+            'telat'        => ['dikembalikan', 'selesai'],
+            'dikembalikan' => ['selesai'],
+            'selesai'      => [],
+        ];
+
+        if (!in_array($statusBaru, $transisi[$statusLama] ?? [])) {
+            return back()->with('error', "Status tidak bisa diubah dari '{$statusLama}' ke '{$statusBaru}'.");
+        }
+
+        // Stok "tertahan" selama alat belum diproses kembali oleh petugas
+        // (stok baru kembali di storePengembalian atau saat keluar dari kelompok ini).
+        $tertahan = ['dipinjam', 'telat', 'dikembalikan'];
+        $tertahanLama = in_array($statusLama, $tertahan);
+        $tertahanBaru = in_array($statusBaru, $tertahan);
 
         DB::beginTransaction();
         try {
-            $statusLama = $peminjaman->status;
-            $statusBaru = $request->status;
-
-            // Logika pengelolaan stok otomatis
-            if ($statusLama != 'dipinjam' && $statusBaru == 'dipinjam') {
-                // Kurangi stok karena barang resmi dipinjam
+            if (!$tertahanLama && $tertahanBaru) {
+                // Baru resmi dipinjam sekarang -> kurangi stok
                 foreach ($peminjaman->detailPinjam as $detail) {
                     $alat = $detail->alat;
                     if ($alat->stok < $detail->jumlah) {
@@ -430,14 +382,20 @@ class AdminController extends Controller
                     }
                     $alat->decrement('stok', $detail->jumlah);
                 }
-            } elseif ($statusLama == 'dipinjam' && $statusBaru == 'selesai') {
-                // Kembalikan stok karena barang sudah dikembalikan (selesai)
+            } elseif ($tertahanLama && !$tertahanBaru) {
+                // Keluar dari kelompok tertahan (ke selesai) -> kembalikan stok
                 foreach ($peminjaman->detailPinjam as $detail) {
                     $detail->alat->increment('stok', $detail->jumlah);
                 }
             }
+            // Perpindahan antar status tertahan (mis. dipinjam -> telat) tidak mengubah stok.
 
             $peminjaman->update(['status' => $statusBaru]);
+
+            LogAktivitas::create([
+                'user_id' => auth()->id(),
+                'aktivitas' => "Mengubah status peminjaman #{$peminjaman->id} dari '{$statusLama}' menjadi '{$statusBaru}'",
+            ]);
 
             DB::commit();
             return redirect()->route('admin.peminjaman.index')->with('success', 'Status peminjaman berhasil diperbarui.');
@@ -452,11 +410,10 @@ class AdminController extends Controller
     {
         $peminjaman = Peminjaman::with('detailPinjam')->findOrFail($id);
 
-        // Jika statusnya sedang dipinjam, kembalikan stok terlebih dahulu sebelum dihapus
-        if ($peminjaman->status == 'dipinjam') {
-            foreach ($peminjaman->detailPinjam as $detail) {
-                $detail->alat->increment('stok', $detail->jumlah);
-            }
+        // Tolak hapus kalau peminjaman masih aktif (alat belum beneran kembali)
+        if (in_array($peminjaman->status, ['dipinjam', 'telat', 'dikembalikan'])) {
+            return redirect()->route('admin.peminjaman.index')
+                ->with('error', 'Data peminjaman masih aktif, tidak dapat dihapus');
         }
 
         $peminjaman->delete();
@@ -464,8 +421,8 @@ class AdminController extends Controller
         return redirect()->route('admin.peminjaman.index')->with('success', 'Data peminjaman berhasil dihapus.');
     }
 
-        // ========================
-    // CRUD PENGEMBALIAN
+    // ========================
+    // KELOLA PENGEMBALIAN
     // ========================
 
     // 1. Menampilkan riwayat pengembalian
@@ -486,11 +443,15 @@ class AdminController extends Controller
         return view('admin.pengembalian.index', compact('pengembalians', 'search'));
     }
 
-    // 2. Menampilkan daftar peminjaman yang masih aktif (belum dikembalikan)
+    // 2. Menampilkan daftar peminjaman yang sudah diajukan pengembaliannya oleh peminjam (menunggu verifikasi petugas)
     public function selectPengembalian()
     {
+        // Hanya peminjaman berstatus 'dikembalikan' (sudah diajukan lewat
+        // PeminjamController::ajukanPengembalian) yang boleh muncul di sini.
+        // Tidak memakai 'dipinjam'/'telat' karena keduanya berarti alat masih
+        // di tangan peminjam dan belum ada pengajuan pengembalian sama sekali.
         $peminjamans = Peminjaman::with(['user', 'detailPinjam.alat'])
-            ->whereIn('status', ['dipinjam', 'telat'])
+            ->where('status', 'dikembalikan')
             ->whereDoesntHave('pengembalian')
             ->latest()
             ->get();
@@ -513,6 +474,12 @@ class AdminController extends Controller
     public function storePengembalian(Request $request, $id)
     {
         $peminjaman = Peminjaman::with('detailPinjam.alat')->findOrFail($id);
+
+        // Guard: cegah pengembalian diproses dua kali (stok akan bertambah dobel)
+        if ($peminjaman->pengembalian()->exists()) {
+            return redirect()->route('admin.pengembalian.index')
+                ->with('error', 'Pengembalian untuk peminjaman ini sudah diproses.');
+        }
 
         $request->validate([
             'tgl_kembali' => 'required|date',
@@ -606,7 +573,7 @@ class AdminController extends Controller
         }
     }
 
-        // ========================
+    // ========================
     // LOG AKTIVITAS
     // ========================
 
@@ -626,5 +593,106 @@ class AdminController extends Controller
             ->withQueryString();
 
         return view('admin.log.index', compact('logs', 'search'));
+    }
+
+    // ========================
+    // KELOLA USER
+    // (Manajemen User: Admin, Petugas, Peminjam)
+    // Mendukung fitur search dan pagination
+    // ========================
+
+    public function indexUser(Request $request)
+    {
+        $search = $request->input('search');
+
+        $users = User::when($search, function ($query, $search) {
+                return $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('role', 'like', "%{$search}%");
+            })
+            ->latest()
+            ->paginate(10) // Tampilkan 10 data per halaman
+            ->withQueryString(); // Memastikan parameter search tetap ada saat pindah halaman
+
+        return view('admin.user.index', compact('users', 'search'));
+    }
+
+    public function createUser()
+    {
+        return view('admin.user.create');
+    }
+
+    // Menyimpan user baru ke database
+    public function storeUser(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:6',
+            'role' => 'required|in:admin,petugas,peminjam',
+        ]);
+
+        User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'no_hp' => $request->no_hp,
+        ]);
+
+        return redirect()->route('admin.user.index')->with('success', 'User berhasil ditambahkan.');
+    }
+
+    public function editUser($id)
+    {
+        $user = User::findOrFail($id);
+        return view('admin.user.edit', compact('user'));
+    }
+
+    // Memperbarui data user
+    public function updateUser(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $id,
+            'role' => 'required|in:admin,petugas,peminjam',
+        ]);
+
+        $data = [
+            'name' => $request->name,
+            'email' => $request->email,
+            'role' => $request->role,
+            'no_hp' => $request->no_hp,
+        ];
+
+        if ($request->filled('password')) {
+            $data['password'] = Hash::make($request->password);
+        }
+
+        $user->update($data);
+
+        return redirect()->route('admin.user.index')->with('success', 'Data user berhasil diperbarui.');
+    }
+
+    // Menghapus user
+    public function destroyUser($id)
+    {
+        $user = User::findOrFail($id);
+
+        // Cek apakah user masih punya peminjaman yang aktif (belum selesai)
+        $adaPeminjamanAktif = Peminjaman::where('user_id', $user->id)
+            ->whereIn('status', ['diajukan', 'dipinjam', 'telat', 'dikembalikan'])
+            ->exists();
+
+        if ($adaPeminjamanAktif) {
+            return redirect()->route('admin.user.index')
+                ->with('error', 'User masih memiliki peminjaman aktif');
+        }
+
+        $user->delete();
+
+        return redirect()->route('admin.user.index')->with('success', 'User berhasil dihapus.');
     }
 }

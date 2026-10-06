@@ -9,6 +9,7 @@ use App\Models\Alat;
 use App\Models\Peminjaman;
 use App\Models\DetailPinjam;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 use Exception;

@@ -104,4 +104,37 @@ class PeminjamController extends Controller
 
         return redirect()->back()->with('success', 'Pengembalian diajukan, menunggu verifikasi petugas.');
     }
+
+        // Menampilkan halaman profil peminjam
+    public function profil()
+    {
+        $user = auth()->user();
+        return view('peminjam.profil', compact('user'));
+    }
+
+    // Memperbarui foto profil peminjam
+    public function updateProfil(Request $request)
+    {
+        $request->validate([
+            'foto_profile' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+        ], [
+            'foto_profile.required' => 'Pilih foto terlebih dahulu.',
+            'foto_profile.image' => 'File harus berupa gambar.',
+            'foto_profile.max' => 'Ukuran foto maksimal 2MB.',
+        ]);
+
+        $user = auth()->user();
+
+        if ($user->foto_profile && file_exists(public_path($user->foto_profile))) {
+            unlink(public_path($user->foto_profile));
+        }
+
+        $file = $request->file('foto_profile');
+        $filename = time() . '_' . $file->getClientOriginalName();
+        $file->move(public_path('storage/users'), $filename);
+
+        $user->update(['foto_profile' => 'storage/users/' . $filename]);
+
+        return redirect()->route('peminjam.profil')->with('success', 'Foto profil berhasil diperbarui.');
+    }
 }

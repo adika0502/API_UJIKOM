@@ -53,7 +53,6 @@
 <body class="font-sans antialiased text-[#20242B]">
     @php
         $role = auth()->user()->role;
-        // Aksen warna otomatis mengikuti role: admin = amber, petugas = steel, peminjam = leaf
         $accent = match($role) {
             'admin' => 'amber',
             'petugas' => 'steel',
@@ -265,15 +264,32 @@
             </nav>
 
             <div class="p-4 border-t border-white/[0.06] space-y-3">
-                <div class="flex items-center gap-3 px-1">
-                    <div class="w-9 h-9 rounded-full bg-{{ $accent }}-soft text-{{ $accent }} flex items-center justify-center font-mono font-semibold text-sm flex-shrink-0 ring-2 ring-{{ $accent }}/30 ring-offset-2 ring-offset-ink">
-                        {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                @if($role === 'peminjam')
+                    <a href="{{ route('peminjam.profil') }}" class="flex items-center gap-3 px-1 hover:opacity-80 transition">
+                        @if(auth()->user()->foto_profile)
+                            <img src="{{ asset(auth()->user()->foto_profile) }}" alt="Foto Profil"
+                                class="w-9 h-9 rounded-full object-cover flex-shrink-0 ring-2 ring-leaf/30 ring-offset-2 ring-offset-ink">
+                        @else
+                            <div class="w-9 h-9 rounded-full bg-{{ $accent }}-soft text-{{ $accent }} flex items-center justify-center font-mono font-semibold text-sm flex-shrink-0 ring-2 ring-{{ $accent }}/30 ring-offset-2 ring-offset-ink">
+                                {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                            </div>
+                        @endif
+                        <div class="min-w-0">
+                            <p class="text-[11px] font-mono text-[#5C6472]">Masuk sebagai</p>
+                            <p class="text-sm font-medium text-white truncate">{{ auth()->user()->name }}</p>
+                        </div>
+                    </a>
+                @else
+                    <div class="flex items-center gap-3 px-1">
+                        <div class="w-9 h-9 rounded-full bg-{{ $accent }}-soft text-{{ $accent }} flex items-center justify-center font-mono font-semibold text-sm flex-shrink-0 ring-2 ring-{{ $accent }}/30 ring-offset-2 ring-offset-ink">
+                            {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-[11px] font-mono text-[#5C6472]">Masuk sebagai</p>
+                            <p class="text-sm font-medium text-white truncate">{{ auth()->user()->name }}</p>
+                        </div>
                     </div>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-mono text-[#5C6472]">Masuk sebagai</p>
-                        <p class="text-sm font-medium text-white truncate">{{ auth()->user()->name }}</p>
-                    </div>
-                </div>
+                @endif
                 <form action="{{ route('logout') }}" method="POST">
                     @csrf
                     <button type="submit" class="w-full flex items-center justify-center gap-2 bg-rust-soft hover:bg-rust text-rust hover:text-white text-sm font-medium px-4 py-2.5 rounded-lg transition border border-rust/25 hover:border-rust">
